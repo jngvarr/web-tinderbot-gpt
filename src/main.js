@@ -1,9 +1,11 @@
 const {HtmlTelegramBot, userInfoToString} = require("./bot");
 const ChatGptService = require("./gpt");
+
 class MyTelegramBot extends HtmlTelegramBot {
     constructor(token) {
         super(token);
         this.mode = null;
+        this.list = [];
     }
 
     async start(msg) {
@@ -38,14 +40,75 @@ class MyTelegramBot extends HtmlTelegramBot {
     }
 
     async gptDialog(msg) {
-        const text = msg.text;
-        const answer = await chat.sendQuestion("Ответь на вопрос: ", text);
-        await this.sendText(answer);
+        const myMessage = await this.sendText("Ваше сообщение отправлено. Ожидайте....")
+        const answer = await chat.sendQuestion("Ответь на вопрос: ", msg.text);
+        await this.editText(myMessage, answer);
+    }
+
+    async date(msg) {
+        this.mode = "date"
+        await this.sendImage("date");
+        const text = this.loadMessage("date")
+        await this.sendTextButtons(text, {
+                "date_grande": "Ариана Гранде",
+                "date_robbie": "Марго Робби",
+                "date_zendaya": "Зендея",
+                "date_gosling": "Райн Гослинг",
+                "date_hardy": "Том Харди",
+            }
+        )
+    }
+
+    async dateButton(callbackQuery) {
+        const query = callbackQuery.data;
+        // await this.sendText(query)
+        await this.sendImage(query);
+        await this.sendText("Хороший выбор! У тебя одна попытка!!   ");
+
+        chat.setPrompt(this.loadPrompt(query));
+    }
+
+    async dateDialog(msg) {
+        const answer = await chat.addMessage(msg.text);
+        const message = await this.sendText("Собеседник набирает текст....")
+        await this.editText(message, answer);
+    }
+
+    async message(msg) {
+        this.mode = "message";
+        await this.sendImage("message");
+        const text = this.loadMessage("message")
+        await this.sendTextButtons(text, {
+            "message_next": "Новое сообщение",
+            "message_date": "Пригласить на свидание",
+        })
+    }
+
+    async messageButton(callbackQuery) {
+        // const query = callbackQuery.data;
+        // await this.sendText(query);
+        const prompt = this.loadPrompt(callbackQuery.data);
+        // const userChatHistory = this.list.join("\n\n");
+        const myMessage = await this.sendText("ChatGPT выбирает вариант ответа....")
+        const answer = await chat.sendQuestion(prompt, this.list.join("\n\n"));
+        await this.editText(myMessage, answer)
+        // this.list.forEach(msg => {this.sendText(msg, myMessage)});
+        // console.log(this.list);
+        this.list = []
+        // console.log(this.list);
+    }
+
+    async messageDialog(msg) {
+        this.list.push(msg.text);
     }
 
     async hello(msg) {
         if (this.mode === "gpt")
             await this.gptDialog(msg);
+        else if (this.mode === "date")
+            await this.dateDialog(msg);
+        else if (this.mode === "message")
+            await this.messageDialog(msg);
         else {
             const text = msg.text;
             await this.sendText(`Вы писали: ${text}`);
@@ -80,5 +143,9 @@ const chat = new ChatGptService("gpt:ho7T8VOJeY6EVWR4okSxJFkblB3Tp7tf2SeYm4s7gNS
 bot.onCommand(/\/start/, bot.start) // start
 bot.onCommand(/\/html/, bot.html) // html
 bot.onCommand(/\/gpt/, bot.gpt) // gpt
+bot.onCommand(/\/date/, bot.date) // date
+bot.onCommand(/\/message/, bot.message) // message
 bot.onTextMessage(bot.hello)
+bot.onButtonCallback(/^date_.*/, bot.dateButton) // date
+bot.onButtonCallback(/^message_.*/, bot.messageButton) // message
 bot.onButtonCallback(/^.*/, bot.helloButton) // any string
